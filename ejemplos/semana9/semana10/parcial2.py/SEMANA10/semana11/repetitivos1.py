@@ -1,0 +1,1 @@
+print("proeso repetitivo")

@@ -1,0 +1,10 @@
+2 realizar le ingreso de varios empleados:
+ nombre ,  categoria(1 o 2) y las horas trabajadas
+ en n dias, muestre su pago sabiendo que la tarifa
+es de acuerdo a la categoria ( cat1=25 y cat2=28)
+al final muestre el pago mayor
+1 Ingrese las ventas de varios vendedores :
+su nombre  y el de ventas , luego muestre
+su total y comision(12% del total )
+luego pedir si se desea ingresar otro vendedor
+al final mostrar el total de comision a pagar
