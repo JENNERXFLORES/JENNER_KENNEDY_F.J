@@ -1,1 +1,1 @@
-{"estudiantes": ["Juan ", "Jhan ", "Pedro "], "votos": {"Juan ": "Pedro "}, "metodo": "Votaci\u00f3n"}
+{"estudiantes": ["Jhan", "Jenner", "Sandra"], "votos": {}, "metodo": "Aleatorio", "votacion_activa": false, "mostrar_resultados": true, "delegado": "Jenner", "subdelegado": "Sandra", "votantes": []}
