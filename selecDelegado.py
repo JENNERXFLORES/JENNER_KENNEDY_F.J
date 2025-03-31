@@ -52,9 +52,9 @@ with col2:
 if st.session_state["rol"]:
     if st.session_state["rol"] == "Alumno":
         st.subheader("Registro / Votación de Estudiantes")
-        # Si aún no se ha configurado el método (ni votación activa ni resultados), se muestra la opción de registro
+        # Si aún no se ha configurado el método (ni votación activa ni resultados), se muestra el formulario de registro
         if not datos["votacion_activa"] and not datos["mostrar_resultados"]:
-            st.info("Regístrate para participar en la elección o ver resultados.")
+            st.info("Regístrate para participar en la elección.")
             nombre_estudiante = st.text_input("✍️ Ingresa tu nombre para registrarte:")
             if st.button("Registrar"):
                 if nombre_estudiante:
@@ -69,8 +69,8 @@ if st.session_state["rol"]:
             st.write("📜 **Lista de estudiantes registrados:**")
             st.write(datos["estudiantes"])
         else:
-            # Una vez configurado el método, se asume que el alumno ya debió haberse registrado.
-            nombre_estudiante = st.text_input("✍️ Ingresa tu nombre para votar:")
+            # Una vez configurado el método, el alumno ingresa su nombre para votar o ver resultados
+            nombre_estudiante = st.text_input("✍️ Ingresa tu nombre para votar o ver resultados:")
             if not nombre_estudiante:
                 st.warning("⚠️ Ingresa tu nombre para continuar.")
             elif nombre_estudiante not in datos["estudiantes"]:
@@ -92,6 +92,12 @@ if st.session_state["rol"]:
                     st.subheader("🏆 Resultados de la Elección")
                     st.success(f"🎖 Delegado: {datos['delegado']}")
                     st.info(f"🥈 Subdelegado: {datos['subdelegado']}")
+                    # Mostrar el recuento final de votos
+                    if datos["votos"]:
+                        conteo_votos = Counter(datos["votos"].values())
+                        st.write("**Resultados de votos:**")
+                        for candidato, cant in conteo_votos.most_common():
+                            st.write(f"{candidato}: {cant} voto(s)")
         # Botón para recargar la página y ver cambios en tiempo real
         if st.button("🔄 Recargar Página"):
             datos = cargar_datos()
@@ -144,8 +150,14 @@ if st.session_state["rol"]:
                             datos["delegado"] = delegado
                             datos["subdelegado"] = subdelegado
                             datos["mostrar_resultados"] = True
+                            # Se desactiva la votación para que los alumnos vean los resultados
+                            datos["votacion_activa"] = False
                             guardar_datos(datos)
                             st.success("✅ Votación finalizada y resultados calculados.")
+                            # Mostrar el recuento final de votos en la vista de administrador
+                            st.write("**Resultados de votos:**")
+                            for candidato, cant in conteo_votos.most_common():
+                                st.write(f"{candidato}: {cant} voto(s)")
                             st.rerun()
                         else:
                             st.warning("⚠️ No se registraron votos.")
@@ -155,6 +167,12 @@ if st.session_state["rol"]:
                 st.subheader("🏆 Resultados de la Elección")
                 st.success(f"🎖 Delegado: {datos['delegado']}")
                 st.info(f"🥈 Subdelegado: {datos['subdelegado']}")
+                # Mostrar el recuento final de votos
+                if datos["votos"]:
+                    conteo_votos = Counter(datos["votos"].values())
+                    st.write("**Resultados de votos:**")
+                    for candidato, cant in conteo_votos.most_common():
+                        st.write(f"{candidato}: {cant} voto(s)")
             if st.button("🧹 Limpiar Lista de Estudiantes"):
                 datos = {"estudiantes": [], "votos": {}, "metodo": None, "votacion_activa": False, 
                          "mostrar_resultados": False, "delegado": None, "subdelegado": None, "votantes": set()}
