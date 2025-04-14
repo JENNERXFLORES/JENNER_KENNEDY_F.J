@@ -33,7 +33,8 @@ def exportar_rerpe_pdf(conn, eleccion_id, logo_path="logo_ucss.png"):
 
     # Delegado
     cursor.execute("""
-        SELECT al.codigoAlumno, al.nombre, al.programaEstudio, ed.votosObtenidos
+        SELECT al.codigoAlumno, al.nombre, al.programaEstudio, ed.votosObtenidos,
+               al.telefono, al.celular, al.email
         FROM elecciones_detalle ed
         JOIN alumnos al ON ed.alumnoId = al.id
         WHERE ed.eleccionId = ? AND ed.rol = 'DELEGADO'
@@ -43,7 +44,8 @@ def exportar_rerpe_pdf(conn, eleccion_id, logo_path="logo_ucss.png"):
 
     # Subdelegado
     cursor.execute("""
-        SELECT al.codigoAlumno, al.nombre, al.programaEstudio, ed.votosObtenidos
+        SELECT al.codigoAlumno, al.nombre, al.programaEstudio, ed.votosObtenidos,
+               al.telefono, al.celular, al.email
         FROM elecciones_detalle ed
         JOIN alumnos al ON ed.alumnoId = al.id
         WHERE ed.eleccionId = ? AND ed.rol = 'SUBDELEGADO'
@@ -51,7 +53,7 @@ def exportar_rerpe_pdf(conn, eleccion_id, logo_path="logo_ucss.png"):
     """, (eleccion_id,))
     subdelegado = cursor.fetchone()
 
-    # Nombre dinámico del archivo
+    # Nombre del archivo
     fecha_dt = datetime.strptime(fecha, "%Y-%m-%d %H:%M:%S")
     fecha_str = fecha_dt.strftime("%Y-%m-%d")
     nombre_pdf = f"RERPE_{asignatura.replace(' ', '_')}_{fecha_str}.pdf"
@@ -61,9 +63,11 @@ def exportar_rerpe_pdf(conn, eleccion_id, logo_path="logo_ucss.png"):
     c = canvas.Canvas(ruta_pdf, pagesize=A4)
     width, height = A4
 
+    # Logo
     if os.path.exists(logo_path):
         c.drawImage(logo_path, 2 * cm, height - 4 * cm, width=4 * cm, preserveAspectRatio=True)
 
+    # Títulos
     c.setFont("Helvetica-Bold", 12)
     c.drawCentredString(width / 2, height - 2.5 * cm, "UNIVERSIDAD CATÓLICA SEDES SAPIENTIAE")
     c.setFont("Helvetica", 10)
@@ -73,24 +77,27 @@ def exportar_rerpe_pdf(conn, eleccion_id, logo_path="logo_ucss.png"):
 
     y = height - 5 * cm
 
-    # Tabla de resumen ajustada
+    # Encabezado tipo tabla
     table_data = [
         ["PROGRAMA DE ESTUDIOS", "CÓDIGO DE ASIGNATURA", "SECCIÓN", "ASIGNATURA", "PROFESOR"],
         [delegado[2] if delegado else "-----", codigo_asig, "------", asignatura, profesor_nombre]
     ]
-    col_widths = [4*cm, 4*cm, 2.5*cm, 4.5*cm, 4.5*cm]
+    col_widths = [4.5*cm, 4*cm, 2.5*cm, 5*cm, 5*cm]
     table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 1, colors.black),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold")
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("FONTSIZE", (0, 1), (-1, 1), 9),
     ]))
     table.wrapOn(c, width, height)
     table.drawOn(c, 2 * cm, y - 2 * cm)
     y -= 6 * cm
 
-    # Texto con fecha y hora actual
+    # Texto de contexto
     now = datetime.now()
     texto = f"""En Lima, el día {now.strftime('%d')} de {now.strftime('%B')} del año {now.year}, 
 siendo las {now.strftime('%I:%M %p')} horas y terminado el acto de elección de delegado, se dio el siguiente resultado:"""
@@ -99,7 +106,6 @@ siendo las {now.strftime('%I:%M %p')} horas y terminado el acto de elección de 
         c.drawString(2 * cm, y, line.strip())
         y -= 0.5 * cm
 
-    # Resultados
     c.drawString(2 * cm, y, f"Número de votos para elegir al delegado (a): {votos_delegado}")
     y -= 0.4 * cm
     c.drawString(2 * cm, y, f"Número de votos para elegir al subdelegado (a): {votos_subdelegado}")
@@ -115,13 +121,16 @@ siendo las {now.strftime('%I:%M %p')} horas y terminado el acto de elección de 
     y -= 0.4 * cm
     c.setFont("Helvetica", 9)
     if delegado:
+        tel = delegado[4] or "__________________________"
+        cel = delegado[5] or "__________________________"
+        email = delegado[6] or "____________________________"
         c.drawString(2 * cm, y, f"Código: {delegado[0]}        Votos: {delegado[3]}")
         y -= 0.4 * cm
         c.drawString(2 * cm, y, f"Apellidos y Nombres: {delegado[1]}")
         y -= 0.4 * cm
-        c.drawString(2 * cm, y, f"Teléfono: __________________________    Celular: _________________________")
+        c.drawString(2 * cm, y, f"Teléfono: {tel}    Celular: {cel}")
         y -= 0.4 * cm
-        c.drawString(2 * cm, y, f"Email: ______________________________    Firma: _________________________")
+        c.drawString(2 * cm, y, f"Email: {email}    Firma: _________________________")
         y -= 1 * cm
     else:
         c.drawString(2 * cm, y, "No se registró delegado.")
@@ -133,13 +142,16 @@ siendo las {now.strftime('%I:%M %p')} horas y terminado el acto de elección de 
     y -= 0.4 * cm
     c.setFont("Helvetica", 9)
     if subdelegado:
+        tel = subdelegado[4] or "__________________________"
+        cel = subdelegado[5] or "__________________________"
+        email = subdelegado[6] or "____________________________"
         c.drawString(2 * cm, y, f"Código: {subdelegado[0]}        Votos: {subdelegado[3]}")
         y -= 0.4 * cm
         c.drawString(2 * cm, y, f"Apellidos y Nombres: {subdelegado[1]}")
         y -= 0.4 * cm
-        c.drawString(2 * cm, y, f"Teléfono: __________________________    Celular: _________________________")
+        c.drawString(2 * cm, y, f"Teléfono: {tel}    Celular: {cel}")
         y -= 0.4 * cm
-        c.drawString(2 * cm, y, f"Email: ______________________________    Firma: _________________________")
+        c.drawString(2 * cm, y, f"Email: {email}    Firma: _________________________")
         y -= 1 * cm
     else:
         c.drawString(2 * cm, y, "No se registró subdelegado.")

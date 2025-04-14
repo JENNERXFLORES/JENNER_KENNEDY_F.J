@@ -10,6 +10,7 @@ from datetime import datetime
 from exportar_pdf import exportar_rerpe_pdf
 import os
 from datetime import datetime
+from PIL import Image
 
 
 
@@ -181,43 +182,71 @@ def registro_alumno_module(conn):
     cursor = conn.cursor()
 
     with st.form("form_alumno", clear_on_submit=True):
-        nombre = st.text_input("Nombre completo")
+        nombre = st.text_input("Apellidos y Nombres")
         codigoAlumno = st.text_input("Código de Alumno")
-        programaEstudio = st.text_input("Programa de Estudios")
+        telefono = st.text_input("Teléfono fijo")
+        celular = st.text_input("Celular")
+        email = st.text_input("Correo electrónico")
+
         enviar = st.form_submit_button("Registrar Alumno")
         if enviar:
-            if nombre and codigoAlumno and programaEstudio:
+            if nombre and codigoAlumno:
                 try:
                     cursor.execute('''
-                        INSERT INTO alumnos (nombre, codigoAlumno, programaEstudio)
-                        VALUES (?, ?, ?)
-                    ''', (nombre, codigoAlumno, programaEstudio))
+                        INSERT INTO alumnos (nombre, codigoAlumno, telefono, celular, email)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (nombre, codigoAlumno, telefono, celular, email))
                     conn.commit()
                     st.success("Alumno registrado correctamente.")
                 except sqlite3.IntegrityError:
                     st.error("El código de alumno ya existe.")
             else:
-                st.error("Completa todos los campos.")
+                st.error("Completa los campos obligatorios: nombre y código.")
 
-    # Solo ADMIN puede ver la tabla y eliminar
     if st.session_state["usuario"]["rol"] == "ADMIN":
         st.subheader("📋 Lista de Alumnos Registrados")
-        cursor.execute("SELECT id, nombre, codigoAlumno, programaEstudio FROM alumnos")
+        cursor.execute("SELECT id, nombre, codigoAlumno, telefono, celular, email FROM alumnos")
         alumnos = cursor.fetchall()
         if alumnos:
             import pandas as pd
-            df = pd.DataFrame(alumnos, columns=["ID", "Nombre", "Código", "Programa"])
+            df = pd.DataFrame(alumnos, columns=["ID", "Nombre", "Código", "Teléfono", "Celular", "Email"])
             st.dataframe(df, use_container_width=True)
 
-            id_borrar = st.number_input("ID de alumno a eliminar", min_value=1, step=1)
+            # Eliminar alumno
+            id_borrar = st.number_input("ID de alumno a eliminar", min_value=1, step=1, key="borrar_alumno")
             if st.button("❌ Eliminar Alumno"):
                 cursor.execute("DELETE FROM alumnos WHERE id = ?", (id_borrar,))
                 conn.commit()
                 st.success("Alumno eliminado.")
-                st.experimental_rerun()
+                st.rerun()
+
+            # Editar alumno
+            st.markdown("---")
+            id_editar = st.number_input("ID de alumno a editar", min_value=1, step=1, key="editar_alumno")
+            cursor.execute("SELECT nombre, codigoAlumno, telefono, celular, email FROM alumnos WHERE id = ?", (id_editar,))
+            alumno = cursor.fetchone()
+            if alumno:
+                with st.form("form_editar_alumno"):
+                    nuevo_nombre = st.text_input("Nuevo nombre", value=alumno[0], key="nuevo_nombre")
+                    nuevo_codigo = st.text_input("Nuevo código", value=alumno[1], key="nuevo_codigo")
+                    nuevo_telefono = st.text_input("Nuevo teléfono", value=alumno[2], key="nuevo_telefono")
+                    nuevo_celular = st.text_input("Nuevo celular", value=alumno[3], key="nuevo_celular")
+                    nuevo_email = st.text_input("Nuevo email", value=alumno[4], key="nuevo_email")
+                    guardar = st.form_submit_button("Guardar Cambios")
+                    if guardar:
+                        try:
+                            cursor.execute('''
+                                UPDATE alumnos
+                                SET nombre = ?, codigoAlumno = ?, telefono = ?, celular = ?, email = ?
+                                WHERE id = ?
+                            ''', (nuevo_nombre, nuevo_codigo, nuevo_telefono, nuevo_celular, nuevo_email, id_editar))
+                            conn.commit()
+                            st.success("✅ Alumno actualizado correctamente.")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("❌ El código de alumno ya existe.")
         else:
             st.info("No hay alumnos registrados.")
-
 #==================================================================
 
 def registro_asignatura_module(conn):
@@ -298,13 +327,37 @@ def registro_profesor_module(conn):
             import pandas as pd
             df = pd.DataFrame(profesores, columns=["ID", "Nombre", "Correo"])
             st.dataframe(df, use_container_width=True)
-            id_eliminar = st.number_input("ID de profesor a eliminar", min_value=1, step=1)
+
+            id_eliminar = st.number_input("ID de profesor a eliminar", min_value=1, step=1, key="profesor_borrar")
             if st.button("❌ Eliminar Profesor"):
                 cursor.execute("DELETE FROM profesores WHERE id = ?", (id_eliminar,))
                 conn.commit()
                 st.success("Profesor eliminado.")
                 st.rerun()
 
+            st.markdown("---")
+            id_editar = st.number_input("ID de profesor a editar", min_value=1, step=1, key="profesor_editar")
+            cursor.execute("SELECT nombre, correo FROM profesores WHERE id = ?", (id_editar,))
+            profesor = cursor.fetchone()
+            if profesor:
+                with st.form("form_editar_profesor"):
+                    nuevo_nombre = st.text_input("Nuevo nombre", value=profesor[0], key="nuevo_nombre_profesor")
+                    nuevo_correo = st.text_input("Nuevo correo", value=profesor[1], key="nuevo_correo_profesor")
+                    guardar = st.form_submit_button("Guardar Cambios")
+                    if guardar:
+                        try:
+                            cursor.execute('''
+                                UPDATE profesores
+                                SET nombre = ?, correo = ?
+                                WHERE id = ?
+                            ''', (nuevo_nombre, nuevo_correo, id_editar))
+                            conn.commit()
+                            st.success("✅ Profesor actualizado correctamente.")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("❌ El correo ya está registrado.")
+        else:
+            st.info("No hay profesores registrados.")
 #===============================================================
 
 def registro_usuario_module(conn):
@@ -339,7 +392,6 @@ def registro_usuario_module(conn):
             except sqlite3.IntegrityError:
                 st.error("El nombre de usuario ya está en uso.")
 
-    # Mostrar tabla solo para ADMIN
     if st.session_state["usuario"]["rol"] == "ADMIN":
         st.subheader("📋 Usuarios Registrados")
         cursor.execute("SELECT id, username, rol, vinculoId FROM usuarios")
@@ -348,13 +400,38 @@ def registro_usuario_module(conn):
             import pandas as pd
             df = pd.DataFrame(usuarios, columns=["ID", "Usuario", "Rol", "VinculoId"])
             st.dataframe(df, use_container_width=True)
-            id_eliminar = st.number_input("ID de usuario a eliminar", min_value=1, step=1)
+
+            id_eliminar = st.number_input("ID de usuario a eliminar", min_value=1, step=1, key="usuario_borrar")
             if st.button("❌ Eliminar Usuario"):
                 cursor.execute("DELETE FROM usuarios WHERE id = ?", (id_eliminar,))
                 conn.commit()
                 st.success("Usuario eliminado.")
                 st.rerun()
 
+            st.markdown("---")
+            id_editar = st.number_input("ID de usuario a editar", min_value=1, step=1, key="usuario_editar")
+            cursor.execute("SELECT username, password, rol FROM usuarios WHERE id = ?", (id_editar,))
+            usuario = cursor.fetchone()
+            if usuario:
+                with st.form("form_editar_usuario"):
+                    nuevo_username = st.text_input("Nuevo username", value=usuario[0], key="nuevo_usuario")
+                    nueva_contra = st.text_input("Nueva contraseña", value=usuario[1], key="nueva_contra")
+                    nuevo_rol = st.selectbox("Nuevo rol", ["ADMIN", "PROFESOR", "ALUMNO"], index=["ADMIN", "PROFESOR", "ALUMNO"].index(usuario[2]), key="nuevo_rol")
+                    guardar = st.form_submit_button("Guardar Cambios")
+                    if guardar:
+                        try:
+                            cursor.execute('''
+                                UPDATE usuarios
+                                SET username = ?, password = ?, rol = ?
+                                WHERE id = ?
+                            ''', (nuevo_username, nueva_contra, nuevo_rol, id_editar))
+                            conn.commit()
+                            st.success("✅ Usuario actualizado correctamente.")
+                            st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("❌ El username ya está en uso.")
+        else:
+            st.info("No hay usuarios registrados.")
 #==============================================================
 def registro_profesor_con_usuario_module(conn):
     st.header("👨‍🏫 Registro de Profesor con Cuenta de Usuario")
@@ -391,8 +468,6 @@ def registro_profesor_con_usuario_module(conn):
                     st.error("Error: Ese correo o nombre de usuario ya está registrado.")
             else:
                 st.warning("Completa todos los campos.")
-
-
 #===============================================================
 # Modulo asociar alumno  asignatura modulo 
 def asociar_alumno_asignatura_module(conn):
@@ -480,7 +555,6 @@ def asociar_alumno_asignatura_module(conn):
                     st.rerun()
     else:
         st.info("Aún no hay alumnos asociados a esta asignatura.")
-
 ######===========================================================
 def crear_eleccion_module(conn):
     st.header("🗳️ Crear Elección")
@@ -563,14 +637,12 @@ def crear_eleccion_module(conn):
                 st.success("✅ Elección finalizada automáticamente y marcada como INACTIVA.")
     else:
         st.info("Primero debes registrar una asignatura.")
-
 #===========================================================================================================
 def votacion_module(conn):
     st.header("🗳️ Módulo de Elecciones por Asignatura")
     cursor = conn.cursor()
 
     usuario = st.session_state["usuario"]
-
     if usuario["rol"] != "ALUMNO":
         st.warning("Este módulo es solo para alumnos.")
         return
@@ -595,24 +667,37 @@ def votacion_module(conn):
     eleccion_sel = st.selectbox("Selecciona la elección:", list(elecciones_dict.keys()))
     eleccion_id = elecciones_dict[eleccion_sel]
 
-    # Obtener datos de la elección seleccionada
     cursor.execute('''
-        SELECT e.asignaturaId, e.metodo, e.estado, a.nombre, p.nombre
+        SELECT e.asignaturaId, e.metodo, e.estado, a.nombre, p.nombre, e.esDesempate
         FROM elecciones e
         JOIN asignaturas a ON e.asignaturaId = a.id
         JOIN profesores p ON a.profesorId = p.id
         WHERE e.id = ?
     ''', (eleccion_id,))
     eleccion_data = cursor.fetchone()
-    asignatura_id, metodo, estado, asig_nombre, profesor_nombre = eleccion_data
+    asignatura_id, metodo, estado, asig_nombre, profesor_nombre, es_desempate = eleccion_data
 
     st.write(f"📘 **Asignatura:** {asig_nombre}")
     st.write(f"👨‍🏫 **Profesor:** {profesor_nombre}")
     st.write(f"⚙️ **Método de Elección:** {metodo}")
     st.write(f"🔒 **Estado:** {'ACTIVA' if estado == 'ACTIVA' else 'INACTIVA'}")
+    if es_desempate:
+        st.markdown("📌 **Esta es una elección de desempate (segunda ronda)**")
 
+    # =========================
+    # MOSTRAR RESULTADO FINAL
+    # =========================
     if estado == "INACTIVA":
-        st.info("📌 Esta elección está cerrada. A continuación se muestran los resultados:")
+        # Verificar si la elección tiene registros en empates
+        cursor.execute("SELECT COUNT(*) FROM empates WHERE eleccionId = ?", (eleccion_id,))
+        tiene_empates = cursor.fetchone()[0] > 0
+
+        if tiene_empates:
+            st.warning("⚠️ Esta elección terminó en empate. Se está a la espera de una nueva votación de desempate.")
+            return
+
+        # Mostrar delegado y subdelegado
+        st.info("📌 La elección está cerrada. A continuación se muestran los resultados finales:")
         cursor.execute('''
             SELECT al.nombre, ed.rol
             FROM elecciones_detalle ed
@@ -620,16 +705,17 @@ def votacion_module(conn):
             WHERE ed.eleccionId = ?
         ''', (eleccion_id,))
         resultados = cursor.fetchall()
-        if resultados:
-            for nombre, rol in resultados:
+
+        roles_vistos = set()
+        for nombre, rol in resultados:
+            if rol not in roles_vistos:
                 st.markdown(f"**{rol}**: {nombre}")
-        else:
-            st.warning("No se han registrado delegados aún.")
+                roles_vistos.add(rol)
         return
 
-    # =============================
-    # SI LA ELECCIÓN ESTÁ ACTIVA:
-    # =============================
+    # =========================
+    # SI ESTÁ ACTIVA → VOTACIÓN
+    # =========================
     if metodo == "VOTACION":
         st.subheader("🗳️ Votación por candidato")
         codigo_alumno = st.text_input("Tu código de alumno")
@@ -641,12 +727,20 @@ def votacion_module(conn):
                 alumno_id_confirmado, nombre = alumno
                 cursor.execute("SELECT * FROM alumno_asignatura WHERE alumnoId = ? AND asignaturaId = ?", (alumno_id_confirmado, asignatura_id))
                 if cursor.fetchone():
-                    cursor.execute('''
-                        SELECT al.id, al.nombre
-                        FROM alumno_asignatura aa
-                        JOIN alumnos al ON aa.alumnoId = al.id
-                        WHERE aa.asignaturaId = ?
-                    ''', (asignatura_id,))
+                    if es_desempate:
+                        cursor.execute('''
+                            SELECT al.id, al.nombre
+                            FROM elecciones_detalle ed
+                            JOIN alumnos al ON ed.alumnoId = al.id
+                            WHERE ed.eleccionId = ?
+                        ''', (eleccion_id,))
+                    else:
+                        cursor.execute('''
+                            SELECT al.id, al.nombre
+                            FROM alumno_asignatura aa
+                            JOIN alumnos al ON aa.alumnoId = al.id
+                            WHERE aa.asignaturaId = ?
+                        ''', (asignatura_id,))
                     candidatos = cursor.fetchall()
 
                     if candidatos:
@@ -655,7 +749,6 @@ def votacion_module(conn):
                         rol_sel = st.selectbox("Rol:", ["DELEGADO", "SUBDELEGADO"])
 
                         if st.button("Votar"):
-                            # Validar si ya votó en esta elección y rol
                             cursor.execute('''
                                 SELECT id FROM registro_votos
                                 WHERE eleccionId = ? AND alumnoId = ? AND rol = ?
@@ -677,25 +770,36 @@ def votacion_module(conn):
                             if ya_existe:
                                 cursor.execute("UPDATE elecciones_detalle SET votosObtenidos = votosObtenidos + 1 WHERE id = ?", (ya_existe[0],))
                             else:
-                                cursor.execute("INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos) VALUES (?, ?, ?, 1)", (eleccion_id, candidato_id, rol_sel))
+                                cursor.execute('''
+                                    INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                                    VALUES (?, ?, ?, 1)
+                                ''', (eleccion_id, candidato_id, rol_sel))
 
-                            # Registrar el voto único
-                            cursor.execute("INSERT INTO registro_votos (eleccionId, alumnoId, rol, fechaVoto) VALUES (?, ?, ?, datetime('now'))", (eleccion_id, alumno_id_confirmado, rol_sel))
+                            cursor.execute('''
+                                INSERT INTO registro_votos (eleccionId, alumnoId, rol, fechaVoto)
+                                VALUES (?, ?, ?, datetime('now'))
+                            ''', (eleccion_id, alumno_id_confirmado, rol_sel))
 
                             if rol_sel == "DELEGADO":
-                                cursor.execute("UPDATE elecciones SET votosDelegado = votosDelegado + 1, totalVotantes = totalVotantes + 1 WHERE id = ?", (eleccion_id,))
+                                cursor.execute('''
+                                    UPDATE elecciones SET votosDelegado = votosDelegado + 1, totalVotantes = totalVotantes + 1
+                                    WHERE id = ?
+                                ''', (eleccion_id,))
                             else:
-                                cursor.execute("UPDATE elecciones SET votosSubdelegado = votosSubdelegado + 1, totalVotantes = totalVotantes + 1 WHERE id = ?", (eleccion_id,))
+                                cursor.execute('''
+                                    UPDATE elecciones SET votosSubdelegado = votosSubdelegado + 1, totalVotantes = totalVotantes + 1
+                                    WHERE id = ?
+                                ''', (eleccion_id,))
 
                             conn.commit()
                             st.success(f"✅ Voto registrado para {candidato_sel} como {rol_sel}")
                     else:
-                        st.warning("No hay candidatos registrados.")
+                        st.warning("⚠️ No hay candidatos registrados.")
                 else:
                     st.error("No estás inscrito en esta asignatura.")
             else:
                 st.error("Código de alumno incorrecto.")
-
+                
     elif metodo == "ALEATORIO":
         st.subheader("🎲 Selección aleatoria")
         if st.button("Seleccionar delegado al azar"):
@@ -719,33 +823,54 @@ def votacion_module(conn):
 
     elif metodo == "VOLUNTARIO":
         st.subheader("✋ Postulación voluntaria")
+
+        # Asegurarse que la tabla tenga la columna "rol"
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS postulaciones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 alumnoId INTEGER,
                 asignaturaId INTEGER,
                 estado TEXT DEFAULT 'PENDIENTE',
+                rol TEXT DEFAULT 'DELEGADO',
                 FOREIGN KEY (alumnoId) REFERENCES alumnos(id),
                 FOREIGN KEY (asignaturaId) REFERENCES asignaturas(id)
             )
         ''')
+
+        # Consultar si ya hay postulaciones para el alumno
         cursor.execute('''
-            SELECT id, estado FROM postulaciones
+            SELECT rol, estado FROM postulaciones
             WHERE alumnoId = ? AND asignaturaId = ?
         ''', (alumno_id, asignatura_id))
-        postulacion = cursor.fetchone()
+        postulaciones = cursor.fetchall()
 
-        if postulacion:
-            estado = postulacion[1]
-            st.info(f"Ya te postulaste. Estado actual: **{estado}**")
+        if postulaciones:
+            st.markdown("📋 Ya te postulaste:")
+            for rol, estado in postulaciones:
+                st.info(f"🔹 Como {rol}: Estado actual → **{estado}**")
         else:
-            if st.button("📨 Postularme como delegado"):
+            st.success("✅ Aún no te postulaste a ningún rol.")
+
+        st.markdown("### 📝 Nueva postulación")
+        rol_postulacion = st.selectbox("¿A qué rol deseas postularte?", ["DELEGADO", "SUBDELEGADO"])
+
+        if st.button("📨 Postularme"):
+            cursor.execute('''
+                SELECT 1 FROM postulaciones
+                WHERE alumnoId = ? AND asignaturaId = ? AND rol = ?
+            ''', (alumno_id, asignatura_id, rol_postulacion))
+            ya_postulado = cursor.fetchone()
+
+            if ya_postulado:
+                st.warning(f"⚠️ Ya te postulaste como {rol_postulacion}.")
+            else:
                 cursor.execute('''
-                    INSERT INTO postulaciones (alumnoId, asignaturaId, estado)
-                    VALUES (?, ?, 'PENDIENTE')
-                ''', (alumno_id, asignatura_id))
+                    INSERT INTO postulaciones (alumnoId, asignaturaId, estado, rol)
+                    VALUES (?, ?, 'PENDIENTE', ?)
+                ''', (alumno_id, asignatura_id, rol_postulacion))
                 conn.commit()
-                st.success("Tu postulación ha sido registrada.")
+                st.success(f"Tu postulación como **{rol_postulacion}** ha sido registrada.")
+
 
 
 #=======================================================================================000
@@ -762,9 +887,44 @@ def gestionar_elecciones_profesor(conn):
         st.error("Tu cuenta no está vinculada a un profesor.")
         return
 
+    # 🔧 Reparar empates no registrados en elecciones antiguas
+    cursor.execute('''
+        SELECT id, asignaturaId
+        FROM elecciones
+        WHERE estado = 'INACTIVA' AND esDesempate = 0
+    ''')
+    elecciones = cursor.fetchall()
+
+    for eleccion_id, _ in elecciones:
+        for rol in ["DELEGADO", "SUBDELEGADO"]:
+            cursor.execute('''
+                SELECT alumnoId, votosObtenidos
+                FROM elecciones_detalle
+                WHERE eleccionId = ? AND rol = ?
+                ORDER BY votosObtenidos DESC
+            ''', (eleccion_id, rol))
+            resultados = cursor.fetchall()
+            if not resultados:
+                continue
+            max_votos = resultados[0][1]
+            empatados = [r for r in resultados if r[1] == max_votos]
+            if len(empatados) > 1:
+                for alumno_id, votos in empatados:
+                    cursor.execute('''
+                        SELECT 1 FROM empates
+                        WHERE eleccionId = ? AND alumnoId = ? AND rol = ?
+                    ''', (eleccion_id, alumno_id, rol))
+                    ya_existe = cursor.fetchone()
+                    if not ya_existe:
+                        cursor.execute('''
+                            INSERT INTO empates (eleccionId, alumnoId, rol, votos)
+                            VALUES (?, ?, ?, ?)
+                        ''', (eleccion_id, alumno_id, rol, votos))
+    conn.commit()
+
     # Obtener elecciones del profesor
     cursor.execute('''
-        SELECT e.id, a.nombre, e.fechaEleccion, e.metodo, e.estado
+        SELECT e.id, a.nombre, e.fechaEleccion, e.metodo, e.estado, e.esDesempate
         FROM elecciones e
         JOIN asignaturas a ON e.asignaturaId = a.id
         WHERE a.profesorId = ?
@@ -776,12 +936,15 @@ def gestionar_elecciones_profesor(conn):
         st.info("No hay elecciones creadas aún para tus asignaturas.")
         return
 
-    for eleccion_id, asig_nombre, fecha, metodo, estado in elecciones:
-        with st.expander(f"📘 {asig_nombre} ({metodo}) — {fecha[:10]} — Estado: {estado}"):
+    for eleccion_id, asig_nombre, fecha, metodo, estado, es_desempate in elecciones:
+        etiqueta = "🌀 [Desempate]" if es_desempate else ""
+        with st.expander(f"📘 {asig_nombre} {etiqueta} ({metodo}) — {fecha[:10]} — Estado: {estado}"):
             col1, col2 = st.columns([2, 1])
             col1.markdown(f"**Método:** {metodo}  \n**Estado actual:** `{estado}`")
 
-            # Cambiar estado
+            if es_desempate:
+                col1.markdown("📌 **Esta es una elección de desempate (segunda ronda)**")
+
             if estado == "ACTIVA":
                 if col2.button("🔒 Desactivar", key=f"desactivar_{eleccion_id}"):
                     cursor.execute("UPDATE elecciones SET estado = 'INACTIVA' WHERE id = ?", (eleccion_id,))
@@ -795,12 +958,68 @@ def gestionar_elecciones_profesor(conn):
                     st.success("Elección activada.")
                     st.rerun()
 
+            # Empates detectados
+            cursor.execute("SELECT COUNT(*) FROM empates WHERE eleccionId = ?", (eleccion_id,))
+            tiene_empates = cursor.fetchone()[0] > 0
+
+            if tiene_empates:
+                st.markdown("---")
+                st.markdown("### ⚖️ Empates registrados")
+
+                for rol in ["DELEGADO", "SUBDELEGADO"]:
+                    cursor.execute('''
+                        SELECT al.nombre, al.codigoAlumno, em.votos
+                        FROM empates em
+                        JOIN alumnos al ON em.alumnoId = al.id
+                        WHERE em.eleccionId = ? AND em.rol = ?
+                    ''', (eleccion_id, rol))
+                    empatados = cursor.fetchall()
+                    if empatados:
+                        st.markdown(f"**{rol}:**")
+                        for nombre, codigo, votos in empatados:
+                            st.info(f"{nombre} ({codigo}) — {votos} votos")
+                    else:
+                        st.info(f"No hay empates para {rol}.")
+
+                if st.button("🚀 Crear nueva elección de desempate", key=f"desempate_{eleccion_id}"):
+                    cursor.execute("SELECT asignaturaId FROM elecciones WHERE id = ?", (eleccion_id,))
+                    asignatura = cursor.fetchone()
+                    if asignatura:
+                        asignatura_id = asignatura[0]
+                        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                        cursor.execute('''
+                            INSERT INTO elecciones (
+                                asignaturaId, fechaEleccion, totalVotantes,
+                                votosDelegado, votosSubdelegado, abstenciones,
+                                estado, metodo, esDesempate
+                            )
+                            VALUES (?, ?, 0, 0, 0, 0, 'ACTIVA', 'VOTACION', 1)
+                        ''', (asignatura_id, fecha_actual))
+                        nueva_eleccion_id = cursor.lastrowid
+
+                        cursor.execute('''
+                            SELECT alumnoId, rol FROM empates WHERE eleccionId = ?
+                        ''', (eleccion_id,))
+                        empatados = cursor.fetchall()
+                        for alumno_id, rol in empatados:
+                            cursor.execute('''
+                                INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                                VALUES (?, ?, ?, 0)
+                            ''', (nueva_eleccion_id, alumno_id, rol))
+
+                        cursor.execute("DELETE FROM empates WHERE eleccionId = ?", (eleccion_id,))
+                        conn.commit()
+
+                        st.success(f"✅ Segunda elección de desempate creada (ID: {nueva_eleccion_id})")
+                        st.rerun()
+
+            # Opciones de eliminación
             st.markdown("---")
             st.markdown("### ⚠️ Eliminar esta elección")
             st.warning("Esta acción eliminará también los votos y postulaciones asociadas.")
             confirmar = st.checkbox(f"Confirmo eliminar elección ID {eleccion_id}", key=f"chk_{eleccion_id}")
             if st.button("🗑️ Eliminar elección", key=f"eliminar_{eleccion_id}") and confirmar:
-                # Eliminar datos relacionados
                 cursor.execute("DELETE FROM elecciones_detalle WHERE eleccionId = ?", (eleccion_id,))
                 cursor.execute("DELETE FROM registro_votos WHERE eleccionId = ?", (eleccion_id,))
                 cursor.execute("DELETE FROM postulaciones WHERE asignaturaId = (SELECT asignaturaId FROM elecciones WHERE id = ?)", (eleccion_id,))
@@ -808,31 +1027,130 @@ def gestionar_elecciones_profesor(conn):
                 conn.commit()
                 st.success("✅ Elección eliminada con éxito.")
                 st.rerun()
-
-
 ##========================================================================================
 def admin_panel_module(conn):
     st.header("📊 Panel de Administración de Elecciones")
     cursor = conn.cursor()
 
-    # Obtener elecciones
+    # 🔧 BLOQUE DE REPARACIÓN AUTOMÁTICA
+    def reparar_errores_delegado_duplicado():
+        corregidas = 0
+        cursor.execute('''
+            SELECT e.id
+            FROM elecciones e
+            WHERE e.estado = 'INACTIVA'
+        ''')
+        elecciones = cursor.fetchall()
+
+        for eleccion_id, in elecciones:
+            cursor.execute('''
+                SELECT alumnoId FROM elecciones_detalle
+                WHERE eleccionId = ? AND rol = 'DELEGADO'
+            ''', (eleccion_id,))
+            delegado = cursor.fetchone()
+
+            cursor.execute('''
+                SELECT alumnoId FROM elecciones_detalle
+                WHERE eleccionId = ? AND rol = 'SUBDELEGADO'
+            ''', (eleccion_id,))
+            subdelegado = cursor.fetchone()
+
+            if delegado and subdelegado and delegado[0] == subdelegado[0]:
+                cursor.execute('''
+                    SELECT alumnoId, votosObtenidos
+                    FROM elecciones_detalle
+                    WHERE eleccionId = ? AND rol = 'SUBDELEGADO'
+                    ORDER BY votosObtenidos DESC
+                ''', (eleccion_id,))
+                subdelegados = cursor.fetchall()
+                for alumno_id, votos in subdelegados:
+                    if alumno_id != delegado[0]:
+                        cursor.execute('''
+                            DELETE FROM elecciones_detalle
+                            WHERE eleccionId = ? AND rol = 'SUBDELEGADO'
+                        ''', (eleccion_id,))
+                        cursor.execute('''
+                            INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                            VALUES (?, ?, 'SUBDELEGADO', ?)
+                        ''', (eleccion_id, alumno_id, votos))
+                        conn.commit()
+                        corregidas += 1
+                        st.success(f"🛠️ Se corrigió elección ID {eleccion_id}. Nuevo subdelegado asignado.")
+                        break
+        if corregidas == 0:
+            st.info("✔️ No se detectaron elecciones con errores de duplicación.")
+
+    reparar_errores_delegado_duplicado()
+    # FIN DEL BLOQUE DE REPARACIÓN
+    # Luego continúa TODO tu código normal como ya lo tienes:
     cursor.execute('''
         SELECT e.id, a.nombre, a.codigoAsignatura, e.fechaEleccion,
                e.totalVotantes, e.votosDelegado, e.votosSubdelegado,
-               e.abstenciones, e.estado
+               e.abstenciones, e.estado, e.esDesempate
         FROM elecciones e
         JOIN asignaturas a ON e.asignaturaId = a.id
         ORDER BY e.fechaEleccion DESC
     ''')
     elecciones = cursor.fetchall()
+    # ================================
+    # 🛠️ BOTÓN MANUAL DE REPARACIÓN
+    # ================================
+    with st.expander("🛠️ Reparar elecciones con errores (delegado = subdelegado)"):
+        if st.button("🔁 Ejecutar reparación manual"):
+            corregidas = 0
+            cursor.execute('''
+                SELECT e.id
+                FROM elecciones e
+                WHERE e.estado = 'INACTIVA'
+            ''')
+            elecciones_error = cursor.fetchall()
+
+            for eleccion_id, in elecciones_error:
+                cursor.execute('''
+                    SELECT alumnoId FROM elecciones_detalle
+                    WHERE eleccionId = ? AND rol = 'DELEGADO'
+                ''', (eleccion_id,))
+                delegado = cursor.fetchone()
+
+                cursor.execute('''
+                    SELECT alumnoId FROM elecciones_detalle
+                    WHERE eleccionId = ? AND rol = 'SUBDELEGADO'
+                ''', (eleccion_id,))
+                subdelegado = cursor.fetchone()
+
+                if delegado and subdelegado and delegado[0] == subdelegado[0]:
+                    # Buscar otro subdelegado posible
+                    cursor.execute('''
+                        SELECT alumnoId, votosObtenidos
+                        FROM elecciones_detalle
+                        WHERE eleccionId = ? AND rol = 'SUBDELEGADO'
+                        ORDER BY votosObtenidos DESC
+                    ''', (eleccion_id,))
+                    candidatos = cursor.fetchall()
+                    for alumno_id, votos in candidatos:
+                        if alumno_id != delegado[0]:
+                            cursor.execute('''
+                                DELETE FROM elecciones_detalle
+                                WHERE eleccionId = ? AND rol = 'SUBDELEGADO'
+                            ''', (eleccion_id,))
+                            cursor.execute('''
+                                INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                                VALUES (?, ?, 'SUBDELEGADO', ?)
+                            ''', (eleccion_id, alumno_id, votos))
+                            conn.commit()
+                            corregidas += 1
+                            st.success(f"✅ Elección ID {eleccion_id}: subdelegado corregido.")
+                            break
+                    else:
+                        st.warning(f"⚠️ Elección ID {eleccion_id}: no hay otro subdelegado válido.")
+            if corregidas == 0:
+                st.info("✔️ No se detectaron elecciones con errores de duplicación.")
 
     if elecciones:
-        import pandas as pd
-        import os
 
         df = pd.DataFrame(elecciones, columns=[
             "ID", "Asignatura", "Código", "Fecha", "Total Votantes",
-            "Votos Delegado", "Votos Subdelegado", "Abstenciones", "Estado"
+            "Votos Delegado", "Votos Subdelegado", "Abstenciones", "Estado", "Desempate"
         ])
         st.dataframe(df, use_container_width=True)
 
@@ -841,58 +1159,165 @@ def admin_panel_module(conn):
 
         eleccion_id = st.number_input("ID de Elección", min_value=1, step=1)
 
-        # Mostrar estado actual
-        cursor.execute("SELECT estado FROM elecciones WHERE id = ?", (eleccion_id,))
+        cursor.execute("SELECT estado, esDesempate, asignaturaId FROM elecciones WHERE id = ?", (eleccion_id,))
         fila = cursor.fetchone()
         if fila:
-            estado_actual = fila[0]
-            st.info(f"🔒 Estado actual: **{estado_actual}**")
+            estado_actual, es_desempate, asignatura_id = fila
 
-            # Botón para cambiar estado
+            st.info(f"🔒 Estado actual: **{estado_actual}**")
+            if es_desempate:
+                st.markdown("📌 **Esta es una elección de desempate (segunda ronda)**")
+
             nuevo_estado = "INACTIVA" if estado_actual == "ACTIVA" else "ACTIVA"
+
             if st.button(f"Cambiar estado a {nuevo_estado}"):
                 if nuevo_estado == "INACTIVA":
-                    # Validar empate antes de permitir cambio
-                    def verificar_ganador_unico(rol):
+
+                    def obtener_top(rol):
                         cursor.execute('''
-                            SELECT alumnoId, SUM(votosObtenidos) as total_votos
+                            SELECT alumnoId, votosObtenidos
                             FROM elecciones_detalle
                             WHERE eleccionId = ? AND rol = ?
-                            GROUP BY alumnoId
-                            ORDER BY total_votos DESC
+                            ORDER BY votosObtenidos DESC
                         ''', (eleccion_id, rol))
-                        resultado = cursor.fetchall()
-                        if not resultado:
-                            return False, None
-                        max_votos = resultado[0][1]
-                        ganadores = [r for r in resultado if r[1] == max_votos]
-                        return len(ganadores) == 1, (ganadores[0] if ganadores else None)
+                        return cursor.fetchall()
 
-                    delegado_unico, delegado = verificar_ganador_unico("DELEGADO")
-                    subdelegado_unico, subdelegado = verificar_ganador_unico("SUBDELEGADO")
+                    def detectar_empate_y_registrar(lista, rol):
+                        if not lista:
+                            return False
+                        max_votos = lista[0][1]
+                        empatados = [item for item in lista if item[1] == max_votos]
+                        if len(empatados) > 1:
+                            for alumno_id, votos in empatados:
+                                cursor.execute('''
+                                    SELECT 1 FROM empates
+                                    WHERE eleccionId = ? AND alumnoId = ? AND rol = ?
+                                ''', (eleccion_id, alumno_id, rol))
+                                ya_existe = cursor.fetchone()
+                                if not ya_existe:
+                                    cursor.execute('''
+                                        INSERT INTO empates (eleccionId, alumnoId, rol, votos)
+                                        VALUES (?, ?, ?, ?)
+                                    ''', (eleccion_id, alumno_id, rol, votos))
+                            conn.commit()
+                            st.error(f"⚠️ Empate detectado en {rol}. Se ha registrado para nueva votación de desempate.")
+                            return True
+                        return False
 
-                    if not delegado_unico or not subdelegado_unico:
-                        st.error("❌ No se puede finalizar la elección. Debe haber un único delegado y subdelegado.")
-                        return
+                    if es_desempate:
+                        st.markdown("🔁 Finalizando segunda vuelta (desempate)...")
 
-                    # Limpiar y registrar solo el ganador
-                    cursor.execute("DELETE FROM elecciones_detalle WHERE eleccionId = ? AND rol = 'DELEGADO'", (eleccion_id,))
-                    cursor.execute("INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos) VALUES (?, ?, 'DELEGADO', ?)", (eleccion_id, delegado[0], delegado[1]))
+                        def obtener_ganador_unico(rol):
+                            cursor.execute('''
+                                SELECT alumnoId, votosObtenidos
+                                FROM elecciones_detalle
+                                WHERE eleccionId = ? AND rol = ?
+                                ORDER BY votosObtenidos DESC
+                            ''', (eleccion_id, rol))
+                            resultados = cursor.fetchall()
+                            if not resultados:
+                                return None
+                            max_votos = resultados[0][1]
+                            empatados = [r for r in resultados if r[1] == max_votos]
+                            return None if len(empatados) > 1 else resultados[0]
 
-                    cursor.execute("DELETE FROM elecciones_detalle WHERE eleccionId = ? AND rol = 'SUBDELEGADO'", (eleccion_id,))
-                    cursor.execute("INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos) VALUES (?, ?, 'SUBDELEGADO', ?)", (eleccion_id, subdelegado[0], subdelegado[1]))
+                        ganador_delegado = obtener_ganador_unico("DELEGADO")
+                        ganador_subdelegado = obtener_ganador_unico("SUBDELEGADO")
 
-                    conn.commit()
-                    st.success("✅ Delegado y Subdelegado únicos definidos correctamente.")
+                        if not ganador_delegado or not ganador_subdelegado:
+                            st.error("❌ No se puede finalizar. Aún hay empate en esta ronda.")
+                            return
+
+                        # Validar que no sean la misma persona
+                        if ganador_delegado[0] == ganador_subdelegado[0]:
+                            # Buscar otro subdelegado
+                            cursor.execute('''
+                                SELECT alumnoId, votosObtenidos
+                                FROM elecciones_detalle
+                                WHERE eleccionId = ? AND rol = 'SUBDELEGADO'
+                                ORDER BY votosObtenidos DESC
+                            ''', (eleccion_id,))
+                            subdelegados = cursor.fetchall()
+                            subdelegado_id = None
+                            for alumno_id, votos in subdelegados:
+                                if alumno_id != ganador_delegado[0]:
+                                    subdelegado_id = alumno_id
+                                    subdelegado_votos = votos
+                                    break
+                            if subdelegado_id is None:
+                                st.error("❌ Delegado y subdelegado no pueden ser la misma persona y no hay otro candidato.")
+                                return
+                        else:
+                            subdelegado_id = ganador_subdelegado[0]
+                            subdelegado_votos = ganador_subdelegado[1]
+
+                        cursor.execute("DELETE FROM elecciones_detalle WHERE eleccionId = ?", (eleccion_id,))
+                        cursor.execute('''
+                            INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                            VALUES (?, ?, 'DELEGADO', ?)
+                        ''', (eleccion_id, ganador_delegado[0], ganador_delegado[1]))
+                        cursor.execute('''
+                            INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                            VALUES (?, ?, 'SUBDELEGADO', ?)
+                        ''', (eleccion_id, subdelegado_id, subdelegado_votos))
+
+                        # Limpiar empates relacionados
+                        cursor.execute('''
+                            DELETE FROM empates
+                            WHERE eleccionId IN (
+                                SELECT id FROM elecciones
+                                WHERE asignaturaId = ? AND esDesempate = 0
+                            )
+                        ''', (asignatura_id,))
+
+                        conn.commit()
+                        st.success("✅ Segunda ronda cerrada correctamente con ganadores únicos.")
+                        st.rerun()
+
+                    else:
+                        top_delegados = obtener_top("DELEGADO")
+                        top_subdelegados = obtener_top("SUBDELEGADO")
+
+                        if not top_delegados or not top_subdelegados:
+                            st.error("❌ No se puede finalizar la elección. Faltan votos registrados.")
+                            return
+
+                        if detectar_empate_y_registrar(top_delegados, "DELEGADO"):
+                            return
+                        if detectar_empate_y_registrar(top_subdelegados, "SUBDELEGADO"):
+                            return
+
+                        delegado_id, delegado_votos = top_delegados[0]
+                        subdelegado_id, subdelegado_votos = top_subdelegados[0]
+
+                        if delegado_id == subdelegado_id:
+                            if len(top_subdelegados) > 1:
+                                subdelegado_id, subdelegado_votos = top_subdelegados[1]
+                            else:
+                                st.error("⚠️ Delegado y subdelegado no pueden ser el mismo alumno y no hay otro.")
+                                return
+
+                        cursor.execute("DELETE FROM elecciones_detalle WHERE eleccionId = ?", (eleccion_id,))
+                        cursor.execute('''
+                            INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                            VALUES (?, ?, 'DELEGADO', ?)
+                        ''', (eleccion_id, delegado_id, delegado_votos))
+                        cursor.execute('''
+                            INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                            VALUES (?, ?, 'SUBDELEGADO', ?)
+                        ''', (eleccion_id, subdelegado_id, subdelegado_votos))
+
+                        conn.commit()
+                        st.success("✅ Delegado y Subdelegado asignados correctamente.")
+                        st.rerun()
 
                 cursor.execute("UPDATE elecciones SET estado = ? WHERE id = ?", (nuevo_estado, eleccion_id))
                 conn.commit()
                 st.success(f"✅ Estado actualizado a {nuevo_estado}")
                 st.rerun()
 
-            # Generar PDF solo si está inactiva
+            # === VISTA PREVIA Y PDF ===
             if estado_actual == "INACTIVA":
-                # Verificar si hay un único delegado y subdelegado
                 cursor.execute("SELECT COUNT(*) FROM elecciones_detalle WHERE eleccionId = ? AND rol = 'DELEGADO'", (eleccion_id,))
                 total_delegados = cursor.fetchone()[0]
                 cursor.execute("SELECT COUNT(*) FROM elecciones_detalle WHERE eleccionId = ? AND rol = 'SUBDELEGADO'", (eleccion_id,))
@@ -901,6 +1326,28 @@ def admin_panel_module(conn):
                 if total_delegados != 1 or total_subdelegados != 1:
                     st.error("❌ No se puede generar el PDF. Se requiere un único delegado y subdelegado.")
                 else:
+                    st.markdown("### 🧾 Vista Previa de Resultados Finales")
+                    cursor.execute('''
+                        SELECT a.nombre, ed.votosObtenidos
+                        FROM elecciones_detalle ed
+                        JOIN alumnos a ON ed.alumnoId = a.id
+                        WHERE ed.eleccionId = ? AND ed.rol = 'DELEGADO'
+                    ''', (eleccion_id,))
+                    delegado = cursor.fetchone()
+
+                    cursor.execute('''
+                        SELECT a.nombre, ed.votosObtenidos
+                        FROM elecciones_detalle ed
+                        JOIN alumnos a ON ed.alumnoId = a.id
+                        WHERE ed.eleccionId = ? AND ed.rol = 'SUBDELEGADO'
+                    ''', (eleccion_id,))
+                    subdelegado = cursor.fetchone()
+
+                    if delegado:
+                        st.info(f"👔 Delegado: **{delegado[0]}** ({delegado[1]} votos)")
+                    if subdelegado:
+                        st.info(f"🧑‍💼 Subdelegado: **{subdelegado[0]}** ({subdelegado[1]} votos)")
+
                     if st.button("📥 Generar Reporte RERPE (PDF)"):
                         from exportar_pdf import exportar_rerpe_pdf
                         ruta = exportar_rerpe_pdf(conn, eleccion_id)
@@ -914,6 +1361,7 @@ def admin_panel_module(conn):
             st.warning("⚠️ ID de elección no encontrado.")
     else:
         st.info("No hay elecciones registradas aún.")
+
 
 #========================================================================================
 def reporte_historial_module(conn):
@@ -934,13 +1382,11 @@ def reporte_historial_module(conn):
                 nombre = resultado[0]
                 st.write(f"Mostrando historial para: **{nombre}**")
             else:
-                st.error("Tu cuenta no está vinculada a una ficha de alumno. Por favor, vincúlala o crea una.")
+                st.error("Tu cuenta no está vinculada a una ficha de alumno.")
                 return
-            st.write(f"Mostrando historial para: **{nombre}**")
         else:
             codigo = st.text_input("Ingresa el código de alumno")
-            buscar = st.button("Buscar Historial por Alumno", key="buscar_historial_alumno")
-            if buscar:
+            if st.button("Buscar Historial por Alumno", key="buscar_historial_alumno"):
                 cursor.execute("SELECT id, nombre FROM alumnos WHERE codigoAlumno = ?", (codigo,))
                 alumno = cursor.fetchone()
                 if alumno:
@@ -952,7 +1398,7 @@ def reporte_historial_module(conn):
 
         if alumno_id:
             cursor.execute("""
-                SELECT ed.rol, ed.votosObtenidos, e.fechaEleccion, a.nombre as Asignatura, p.nombre as profesor
+                SELECT ed.rol, ed.votosObtenidos, e.fechaEleccion, a.nombre AS Asignatura, p.nombre AS Profesor
                 FROM elecciones_detalle ed
                 JOIN elecciones e ON ed.eleccionId = e.id
                 JOIN asignaturas a ON e.asignaturaId = a.id
@@ -965,7 +1411,12 @@ def reporte_historial_module(conn):
             st.subheader(f"Historial de elecciones para: {nombre}")
             if resultados:
                 df = pd.DataFrame(resultados, columns=["Rol", "Votos Obtenidos", "Fecha", "Asignatura", "Profesor"])
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
+
+                # Visualización gráfica
+                conteo_roles = df["Rol"].value_counts()
+                st.markdown("### 📊 Participación total por rol")
+                st.bar_chart(conteo_roles)
             else:
                 st.info("Este alumno no ha participado en ninguna elección.")
 
@@ -991,10 +1442,13 @@ def reporte_historial_module(conn):
                 st.subheader(f"Historial de elecciones para la asignatura: {seleccion}")
                 if resultados:
                     df = pd.DataFrame(resultados, columns=["ID Elección", "Fecha", "Rol", "Alumno", "Votos Obtenidos"])
-                    st.dataframe(df)
+                    st.dataframe(df, use_container_width=True)
+
+                    conteo_roles_asig = df["Rol"].value_counts()
+                    st.markdown("### 📊 Participación por rol en esta asignatura")
+                    st.bar_chart(conteo_roles_asig)
                 else:
                     st.info("No hay elecciones registradas para esta asignatura.")
-
 
 #===========================================================================================
 
@@ -1025,76 +1479,72 @@ def generar_reporte(conn, eleccion_id):
         st.write("No se han registrado resultados para esta elección.")
 #========================================================================================
 def aprobar_postulaciones_module(conn):
-    st.header("✋ Aprobación de Postulaciones Voluntarias")
+    st.header("✅ Aprobación de Postulaciones Voluntarias")
     cursor = conn.cursor()
-
-    # Validar sesión y rol
-    if "usuario" not in st.session_state or st.session_state["usuario"]["rol"] != "PROFESOR":
-        st.warning("Este módulo solo está disponible para profesores.")
-        return
-
-    profesor_id = st.session_state["usuario"].get("vinculoId")
-    if not profesor_id:
-        st.error("Tu cuenta no está vinculada a un profesor.")
-        return
-
-    # Obtener asignaturas del profesor
-    cursor.execute("SELECT id, nombre FROM asignaturas WHERE profesorId = ?", (profesor_id,))
-    asignaturas = cursor.fetchall()
-    if not asignaturas:
-        st.info("No tienes asignaturas asignadas.")
-        return
-
-    asignatura_dict = {f"{nombre} (ID: {id})": id for id, nombre in asignaturas}
-    asignatura_sel = st.selectbox("Selecciona una asignatura", list(asignatura_dict.keys()))
-    asignatura_id = asignatura_dict[asignatura_sel]
 
     # Obtener postulaciones pendientes
     cursor.execute('''
-        SELECT po.id, al.id, al.nombre, al.codigoAlumno
-        FROM postulaciones po
-        JOIN alumnos al ON po.alumnoId = al.id
-        WHERE po.asignaturaId = ? AND po.estado = 'PENDIENTE'
-    ''', (asignatura_id,))
+        SELECT p.id, a.nombre, al.nombre, al.codigoAlumno, p.rol, p.estado, p.asignaturaId
+        FROM postulaciones p
+        JOIN alumnos al ON p.alumnoId = al.id
+        JOIN asignaturas a ON p.asignaturaId = a.id
+        WHERE p.estado = 'PENDIENTE'
+    ''')
     postulaciones = cursor.fetchall()
 
-    if postulaciones:
-        st.subheader("Postulaciones pendientes:")
-        for post_id, alumno_id, nombre, codigo in postulaciones:
-            col1, col2, col3 = st.columns([4, 2, 2])
-            col1.markdown(f"**{nombre}** (Código: `{codigo}`)")
-            with col2:
-                if st.button("✅ Aprobar", key=f"aprobar_{post_id}"):
-                    # Verificar si ya existe elección para esta asignatura
-                    cursor.execute('''
-                        SELECT id FROM elecciones
-                        WHERE asignaturaId = ? AND metodo = 'VOLUNTARIO'
-                        ORDER BY fechaEleccion DESC LIMIT 1
-                    ''', (asignatura_id,))
-                    eleccion = cursor.fetchone()
+    if not postulaciones:
+        st.info("No hay postulaciones pendientes.")
+        return
 
-                    if eleccion:
-                        eleccion_id = eleccion[0]
-                        # Registrar como delegado
-                        cursor.execute('''
-                            INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
-                            VALUES (?, ?, 'DELEGADO', 1)
-                        ''', (eleccion_id, alumno_id))
-                        # Marcar postulación como aprobada
-                        cursor.execute("UPDATE postulaciones SET estado = 'APROBADO' WHERE id = ?", (post_id,))
-                        conn.commit()
-                        st.success(f"{nombre} ha sido aprobado como delegado.")
-                        st.rerun()
-                    else:
-                        st.error("No hay una elección VOLUNTARIA activa para esta asignatura.")
-            with col3:
-                if st.button("❌ Rechazar", key=f"rechazar_{post_id}"):
-                    cursor.execute("UPDATE postulaciones SET estado = 'RECHAZADO' WHERE id = ?", (post_id,))
-                    conn.commit()
-                    st.warning(f"{nombre} ha sido rechazado.")
-                    st.rerun()
-    else:
-        st.info("No hay postulaciones pendientes para esta asignatura.")
+    for id_post, nombre_asig, nombre_alumno, codigo_alumno, rol, estado, asignatura_id in postulaciones:
+        with st.expander(f"📝 {nombre_alumno} ({codigo_alumno}) — {rol} — {nombre_asig}"):
+            st.write(f"📚 **Asignatura:** {nombre_asig}")
+            st.write(f"🙋 **Alumno:** {nombre_alumno}")
+            st.write(f"📌 **Rol postulado:** {rol}")
+            st.write(f"🕓 **Estado:** {estado}")
+
+            votos_simulados = st.number_input("Asignar cantidad de votos", min_value=1, max_value=100, value=3, step=1, key=f"votos_{id_post}")
+
+            if st.button("✅ Aprobar postulación", key=f"aprobar_{id_post}"):
+                # Buscar elección activa para esa asignatura
+                cursor.execute('''
+                    SELECT id FROM elecciones
+                    WHERE asignaturaId = ? AND estado = 'INACTIVA'
+                    ORDER BY fechaEleccion DESC
+                    LIMIT 1
+                ''', (asignatura_id,))
+                eleccion = cursor.fetchone()
+
+                if not eleccion:
+                    st.error("❌ No se encontró una elección finalizada para esta asignatura.")
+                    continue
+
+                eleccion_id = eleccion[0]
+
+                # Insertar en elecciones_detalle
+                cursor.execute('''
+                    INSERT INTO elecciones_detalle (eleccionId, alumnoId, rol, votosObtenidos)
+                    VALUES (?, (SELECT alumnoId FROM postulaciones WHERE id = ?), ?, ?)
+                ''', (eleccion_id, id_post, rol, votos_simulados))
+
+                # Actualizar votos y total votantes en elecciones
+                if rol == "DELEGADO":
+                    cursor.execute('''
+                        UPDATE elecciones
+                        SET votosDelegado = votosDelegado + ?, totalVotantes = totalVotantes + ?
+                        WHERE id = ?
+                    ''', (votos_simulados, votos_simulados, eleccion_id))
+                else:
+                    cursor.execute('''
+                        UPDATE elecciones
+                        SET votosSubdelegado = votosSubdelegado + ?, totalVotantes = totalVotantes + ?
+                        WHERE id = ?
+                    ''', (votos_simulados, votos_simulados, eleccion_id))
+
+                # Marcar como aprobada
+                cursor.execute("UPDATE postulaciones SET estado = 'APROBADA' WHERE id = ?", (id_post,))
+                conn.commit()
+                st.success(f"✅ Postulación aprobada e integrada a la elección #{eleccion_id}")
 
 #========================================================================================
 def registro_publico_module(conn):
@@ -1138,8 +1588,17 @@ def registro_publico_module(conn):
 
 
 # Modulo ligin 
+from PIL import Image
+import streamlit as st
+
 def login_module(conn):
+    # Imagen decorativa en el cuerpo principal
+    col1, col2 = st.columns([1, 1.5])
+    with col1:
+        st.image("image.png", caption="Sistema de Elecciones Académicas", width=800)
+
     st.sidebar.subheader("Iniciar Sesión")
+    
     if 'vista' not in st.session_state:
         st.session_state["vista"] = "login"
 
@@ -1282,9 +1741,8 @@ def main():
     inicializar_admin(conn)  # Inserta el admin si no existe
     
 # Esto hace que el reloj se actualice automáticamente cada 5 segundos
-    st_autorefresh(interval=9000, key="reloj_actual")
-    now = datetime.now()
-    st.sidebar.markdown(f"🕒 Hora actual: `{now.strftime('%I:%M:%S %p')}`")
+#    st_autorefresh(interval=9000, key="reloj_actual")
+#   now = datetime.now() st.sidebar.markdown(f"🕒 Hora actual: `{now.strftime('%I:%M:%S %p')}`")
 
 
     if 'usuario' not in st.session_state:
