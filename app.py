@@ -11,6 +11,15 @@ from exportar_pdf import exportar_rerpe_pdf
 import os
 from datetime import datetime
 from PIL import Image
+# Importa los estilos y el fondo login según lo que usarás
+from utils import (
+    aplicar_css_estilo_clasico,        # Solo si usarás el tema clásico
+    aplicar_css_estilo_universitario,  # Solo si usarás el tema universitario
+    aplicar_css_moderno_adaptativo,    # Tema moderno responsivo
+    aplicar_css_fondo_login,           # Fondo con imagen en login
+    aplicar_css_botones_sidebar        # Botones modernos en menú
+)
+
 
 
 
@@ -1736,28 +1745,35 @@ def vincular_alumno_module(conn):
 # =====================
 
 def main():
+    from utils import (
+        aplicar_css_moderno_adaptativo,
+        aplicar_css_fondo_login,
+        aplicar_css_botones_sidebar,
+    )
     conn = conectar_db()
     crear_tablas(conn)
-    inicializar_admin(conn)  # Inserta el admin si no existe
-    
-# Esto hace que el reloj se actualice automáticamente cada 5 segundos
-#    st_autorefresh(interval=9000, key="reloj_actual")
-#   now = datetime.now() st.sidebar.markdown(f"🕒 Hora actual: `{now.strftime('%I:%M:%S %p')}`")
+    inicializar_admin(conn)
 
-
+    # ============ LOGIN CON FONDO DE IMAGEN =============
     if 'usuario' not in st.session_state:
+        aplicar_css_fondo_login()
         login_module(conn)
         return
+
+    # ============ APP CON ESTILO MODERNO Y BOTONES =========
+    aplicar_css_moderno_adaptativo()
+    aplicar_css_botones_sidebar()
 
     usuario = st.session_state['usuario']
     rol = usuario["rol"]
 
     st.sidebar.title(f"Navegación - {rol}")
     st.sidebar.write(f"Sesión iniciada como: {usuario['username']}")
-    if rol == "ALUMNO" and st.session_state['usuario'].get("vinculoId"):
+    if rol == "ALUMNO" and usuario.get("vinculoId"):
         cursor = conn.cursor()
-        cursor.execute("SELECT nombre, codigoAlumno, programaEstudio FROM alumnos WHERE id = ?", 
-                   (st.session_state['usuario']["vinculoId"],))
+        cursor.execute(
+            "SELECT nombre, codigoAlumno, programaEstudio FROM alumnos WHERE id = ?",
+            (usuario["vinculoId"],))
         alumno = cursor.fetchone()
         if alumno:
             st.sidebar.markdown("---")
@@ -1765,11 +1781,8 @@ def main():
             st.sidebar.markdown(f"🧾 **Código:** {alumno[1]}")
             st.sidebar.markdown(f"🏫 **Carrera:** {alumno[2]}")
 
-
-
     # Menús según rol
     opciones = []
-
     if rol == "ADMIN":
         opciones = [
             "Registro Alumno",
@@ -1780,34 +1793,43 @@ def main():
             "Administración",
             "Reporte Historial",
             "Registro de Usuarios",
-            "Registro de Profesores",  # 👈 Agrega esta línea
-            "Registro de Profesor + Usuario"  # ✅ Nueva opción
+            "Registro de Profesores",
+            "Registro de Profesor + Usuario"
         ]
     elif rol == "PROFESOR":
         opciones = [
             "Registro de Profesores",
             "Registro Asignatura",
             "Crear Elección",
-            "Asociar Alumno a Asignatura",  # ✅ nuevo acceso
+            "Asociar Alumno a Asignatura",
             "Administración",
             "Reporte Historial",
             "Vincular con Ficha de Profesor",
             "Aprobación de Postulaciones",
             "Gestionar Elecciones"
-            
         ]
     elif rol == "ALUMNO":
         opciones = [
-            "Registro Alumno",  # Si quieres permitir que cree su ficha
+            "Registro Alumno",
             "Votación/Selección",
             "Reporte Historial",
-            "Vincular con Ficha de Alumno"  # ✅ nueva opción
-
+            "Vincular con Ficha de Alumno"
         ]
 
+    # ============ MENÚ DE BOTONES MODERNOS ============
     if opciones:
-        opcion = st.sidebar.radio("Ir a:", opciones)
+        if "menu_nav" not in st.session_state or st.session_state.get("last_rol") != rol:
+            st.session_state["menu_nav"] = opciones[0]
+            st.session_state["last_rol"] = rol
 
+        st.sidebar.markdown("Ir a:")
+        for opcion_btn in opciones:
+            if st.sidebar.button(opcion_btn, key=f"btn_{opcion_btn}", use_container_width=True):
+                st.session_state["menu_nav"] = opcion_btn
+
+        opcion = st.session_state["menu_nav"]
+
+        # Lógica de módulos
         if opcion == "Registro Alumno":
             registro_alumno_module(conn)
         elif opcion == "Registro Asignatura":
@@ -1829,27 +1851,22 @@ def main():
         elif opcion == "Registro de Profesor + Usuario":
             registro_profesor_con_usuario_module(conn)
         elif opcion == "Vincular con Ficha de Profesor":
-             vincular_profesor_module(conn)
+            vincular_profesor_module(conn)
         elif opcion == "Vincular con Ficha de Alumno":
             vincular_alumno_module(conn)
-        if opcion == "Aprobación de Postulaciones":
+        elif opcion == "Aprobación de Postulaciones":
             aprobar_postulaciones_module(conn)
-        if opcion == "Gestionar Elecciones":
+        elif opcion == "Gestionar Elecciones":
             gestionar_elecciones_profesor(conn)
-
-        
-
-
     else:
         st.warning("No tienes opciones disponibles para este rol.")
 
-
+    # ============ BOTÓN CERRAR SESIÓN ============
     if st.sidebar.button("Cerrar Sesión"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.success("Sesión cerrada. Recargando...")
-        st.rerun()  # Aquí sí está bien usarlo tras limpiar sesión
-
+        st.rerun()
 
 if __name__ == "__main__":
     main()
